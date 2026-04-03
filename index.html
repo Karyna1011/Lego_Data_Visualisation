@@ -1,0 +1,761 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LEGO: анатомія іграшкової імперії</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+  <script src="lego_data.js"></script>
+  <style>
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    :root{
+      --red:#e3000b;--yellow:#f5a623;--blue:#006db7;--green:#007f3b;
+      --bg:#0d0d0d;--card:#161616;--border:#2a2a2a;--text:#e8e8e8;--muted:#888;
+    }
+    html{scroll-behavior:smooth}
+    body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--text);line-height:1.6}
+    @keyframes spin{to{transform:rotate(360deg)}}
+    @keyframes fadein{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:none}}
+    #loading{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:24px}
+    .lego-logo{font-size:64px;font-weight:900;letter-spacing:-2px}
+    .lego-logo span{color:var(--red)}
+    .spinner{width:48px;height:48px;border:3px solid var(--border);border-top-color:var(--yellow);border-radius:50%;animation:spin .8s linear infinite}
+    nav{position:sticky;top:0;z-index:100;background:rgba(13,13,13,.95);backdrop-filter:blur(8px);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 1.5rem;height:52px;gap:1.5rem;overflow-x:auto}
+    nav .brand{font-weight:700;font-size:15px;color:var(--red);white-space:nowrap}
+    nav a{font-size:12px;color:var(--muted);text-decoration:none;transition:color .2s;white-space:nowrap}
+    nav a:hover{color:var(--text)}
+    #hero{min-height:90vh;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:4rem 2rem;border-bottom:1px solid var(--border);animation:fadein .8s ease}
+    .hero-year{font-size:13px;color:var(--yellow);letter-spacing:3px;text-transform:uppercase;margin-bottom:1rem}
+    h1{font-size:clamp(32px,6vw,72px);font-weight:800;line-height:1.1;max-width:800px}
+    h1 em{color:var(--red);font-style:normal}
+    .hero-sub{font-size:17px;color:var(--muted);max-width:540px;margin:1.5rem auto 3rem}
+    .stats-row{display:flex;flex-wrap:wrap;gap:12px;justify-content:center}
+    .stat-card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px 24px;min-width:130px;text-align:center}
+    .stat-val{font-size:26px;font-weight:700}
+    .stat-lbl{font-size:11px;color:var(--muted);margin-top:4px}
+    section{max-width:900px;margin:0 auto;padding:4rem 1.5rem;border-bottom:1px solid var(--border)}
+    .section-num{font-size:11px;color:var(--yellow);letter-spacing:2px;text-transform:uppercase;margin-bottom:.5rem}
+    h2{font-size:clamp(20px,3.5vw,32px);font-weight:700;margin-bottom:.75rem}
+    .section-desc{color:var(--muted);font-size:14px;margin-bottom:1.5rem;max-width:620px}
+    .controls{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:1.2rem;align-items:center}
+    .ctrl-label{font-size:12px;color:var(--muted);white-space:nowrap}
+    select{background:var(--card);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:6px 10px;font-size:13px;outline:none;cursor:pointer}
+    select:focus{border-color:var(--yellow)}
+    .range-wrap{display:flex;align-items:center;gap:8px}
+    .range-val{font-size:13px;color:var(--yellow);min-width:40px;font-weight:600}
+    input[type=range]{
+      -webkit-appearance:none;appearance:none;
+      background:var(--border);border-radius:4px;height:4px;
+      outline:none;cursor:pointer;width:140px;
+    }
+    input[type=range]::-webkit-slider-thumb{
+      -webkit-appearance:none;appearance:none;
+      width:16px;height:16px;border-radius:50%;
+      background:var(--yellow);cursor:pointer;
+      border:2px solid var(--bg);
+    }
+    input[type=range]::-moz-range-thumb{
+      width:16px;height:16px;border-radius:50%;
+      background:var(--yellow);cursor:pointer;border:2px solid var(--bg);
+    }
+    .toggle-btn{padding:6px 14px;border-radius:8px;font-size:13px;cursor:pointer;border:1px solid var(--border);background:var(--card);color:var(--text);transition:all .2s}
+    .toggle-btn.active{background:var(--yellow);color:#111;border-color:var(--yellow);font-weight:600}
+    .chart-box{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:1.5rem;overflow:hidden}
+    svg text{font-family:'Segoe UI',system-ui,sans-serif}
+    #waffle-legend{display:flex;flex-wrap:wrap;gap:8px 16px;margin-top:1rem;font-size:12px;color:var(--muted)}
+    .leg-item{display:flex;align-items:center;gap:6px}
+    .leg-swatch{width:10px;height:10px;border-radius:2px;flex-shrink:0}
+
+    /* TOP SETS */
+    #sets-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:14px;margin-top:1.5rem}
+    .set-card{background:#1c1c1c;border:1px solid var(--border);border-radius:12px;overflow:hidden;transition:transform .2s,border-color .2s}
+    .set-card:hover{transform:translateY(-3px);border-color:#444}
+    .set-img{height:120px;display:flex;align-items:center;justify-content:center;background:#111;overflow:hidden;font-size:40px}
+    .set-img img{max-height:120px;max-width:100%;object-fit:contain;transition:transform .3s}
+    .set-card:hover .set-img img{transform:scale(1.05)}
+    .set-info{padding:10px 12px}
+    .set-name{font-size:12px;font-weight:500;color:var(--text);line-height:1.3;margin-bottom:6px}
+    .set-meta{display:flex;justify-content:space-between;align-items:center}
+    .set-theme{font-size:10px;padding:2px 7px;border-radius:4px}
+    .set-price{font-size:13px;font-weight:700;color:var(--red)}
+    .set-year{font-size:10px;color:#555;margin-top:4px}
+
+    footer{text-align:center;padding:3rem 1rem;color:var(--muted);font-size:13px;border-top:1px solid var(--border)}
+    footer a{color:var(--yellow);text-decoration:none}
+    #tooltip{position:fixed;background:#1a1a1a;color:#fff;border:1px solid #333;border-radius:8px;padding:8px 12px;font-size:12px;line-height:1.6;pointer-events:none;opacity:0;transition:opacity .12s;z-index:999;max-width:210px}
+    #main-content{display:none}
+  </style>
+</head>
+<body>
+
+<div id="loading">
+  <div class="lego-logo">LE<span>GO</span></div>
+  <p style="color:var(--muted)">Завантаження даних...</p>
+  <div class="spinner"></div>
+</div>
+<div id="tooltip"></div>
+
+<div id="main-content">
+  <nav>
+    <span class="brand">LEGO ×</span>
+    <a href="#section-growth">Зростання</a>
+    <a href="#section-price">Ціна/деталь</a>
+    <a href="#section-scatter">Scatter</a>
+    <a href="#section-waffle">Склад</a>
+    <a href="#section-age">Вік</a>
+    <a href="#section-radar">Радар</a>
+    <a href="#section-decade">Декади</a>
+    <a href="#section-minifig">Мініфіги</a>
+    <a href="#section-top">Топ наборів</a>
+  </nav>
+
+  <div id="hero">
+    <div class="hero-year">1990 - 2023</div>
+    <h1>Анатомія<br><em>іграшкової</em> імперії</h1>
+    <p class="hero-sub">18 000+ наборів, десятиліття зростання та секрет ціни однієї деталі</p>
+    <div class="stats-row" id="hero-stats"></div>
+  </div>
+
+  <!-- 1 GROWTH -->
+  <section id="section-growth">
+    <div class="section-num">01 / зростання</div>
+    <h2>Як LEGO завойовував світ</h2>
+    <p class="section-desc">Кількість нових наборів щороку. Різкий стрибок після 1999-го — LEGO підписав ліцензію з Star Wars.</p>
+    <div class="controls">
+      <button class="toggle-btn active" id="btn-total" onclick="setGrowthMode('total')">Загалом</button>
+      <button class="toggle-btn" id="btn-stacked" onclick="setGrowthMode('stacked')">По темах</button>
+    </div>
+    <div class="chart-box"><div id="chart-growth"></div></div>
+  </section>
+
+  <!-- 2 PRICE -->
+  <section id="section-price">
+    <div class="section-num">02 / ціна за деталь</div>
+    <h2>Ліцензія коштує грошей</h2>
+    <p class="section-desc">Медіанна ціна однієї деталі по темах. Ліцензовані всесвіти помітно дорожчі.</p>
+    <div class="controls">
+      <label class="ctrl-label">Сортування:</label>
+      <select id="ppp-sort" onchange="renderPPP()">
+        <option value="price">за ціною</option>
+        <option value="alpha">за назвою</option>
+        <option value="count">за к-стю</option>
+      </select>
+      <div class="range-wrap">
+        <label class="ctrl-label">Тем:</label>
+        <input type="range" id="ppp-n" min="5" max="15" value="12" step="1"
+               oninput="document.getElementById('ppp-n-val').textContent=this.value;renderPPP()">
+        <span class="range-val" id="ppp-n-val">12</span>
+      </div>
+      <label class="ctrl-label">Виділити:</label>
+      <select id="ppp-hl" onchange="renderPPP()"><option value="">—</option></select>
+    </div>
+    <div class="chart-box"><div id="chart-ppp"></div></div>
+  </section>
+
+  <!-- 3 SCATTER -->
+  <section id="section-scatter">
+    <div class="section-num">03 / ціна vs деталі</div>
+    <h2>Більше деталей = дорожче?</h2>
+    <p class="section-desc">Кожна точка — один набір. Лінія тренду показує загальний зв'язок.</p>
+    <div class="controls">
+      <label class="ctrl-label">Тема:</label>
+      <select id="sc-theme" onchange="renderScatter()"><option value="">Всі теми</option></select>
+      <div class="range-wrap">
+        <label class="ctrl-label">Рік до:</label>
+        <input type="range" id="sc-year" min="1990" max="2022" value="2022" step="1"
+               oninput="document.getElementById('sc-year-val').textContent=this.value;renderScatter()">
+        <span class="range-val" id="sc-year-val">2023</span>
+      </div>
+      <button class="toggle-btn active" id="btn-trend" onclick="toggleTrend()">Тренд</button>
+    </div>
+    <div class="chart-box"><div id="chart-scatter"></div></div>
+  </section>
+
+  <!-- 4 WAFFLE -->
+  <section id="s-waffle">
+    <div class="section-num">04 / склад року</div>
+    <h2>Що будував LEGO у вибраний рік?</h2>
+    <p class="section-desc">Кожен квадратик ≈ 1% від усіх наборів року. Порівняйте 1990 і 2020.</p>
+    <div class="controls">
+      <div class="range-wrap">
+        <label class="ctrl-label">Рік:</label>
+        <input type="range" id="waffle-year" min="2000" max="2022" value="2015" step="1"
+               oninput="document.getElementById('waffle-year-val').textContent=this.value;renderWaffle()">
+        <span class="range-val" id="waffle-year-val">2015</span>
+      </div>
+    </div>
+    <div class="chart-box">
+      <div id="chart-waffle"></div>
+      <div id="waffle-legend"></div>
+    </div>
+  </section>
+
+
+  <!-- 5 AGE vs PRICE -->
+  <section id="section-age">
+    <div class="section-num">05 / вік і ціна</div>
+    <h2>Для кого LEGO робить дорогі набори?</h2>
+    <p class="section-desc">Середня ціна набору залежно від мінімального рекомендованого віку. Дорослі набори (16+) коштують значно більше.</p>
+    <div class="controls">
+      <label class="ctrl-label">Тема:</label>
+      <select id="age-theme" onchange="renderAge()"><option value="">Всі теми</option></select>
+    </div>
+    <div class="chart-box"><div id="chart-age"></div></div>
+  </section>
+
+  <!-- 6 RADAR -->
+  <section id="section-radar">
+    <div class="section-num">06 / радар тем</div>
+    <h2>Профіль теми: ціна, деталі, мінімальний вік</h2>
+    <p class="section-desc">Порівняйте до трьох тем одночасно за нормалізованими показниками.</p>
+    <div class="controls">
+      <label class="ctrl-label">Тема 1:</label>
+      <select id="radar-t1" onchange="renderRadar()"></select>
+      <label class="ctrl-label">Тема 2:</label>
+      <select id="radar-t2" onchange="renderRadar()"></select>
+      <label class="ctrl-label">Тема 3:</label>
+      <select id="radar-t3" onchange="renderRadar()"><option value="">—</option></select>
+    </div>
+    <div class="chart-box"><div id="chart-radar"></div></div>
+  </section>
+
+  <!-- 7 DECADE HEATMAP -->
+  <section id="s-decade">
+    <div class="section-num">07 / декади</div>
+    <h2>Коли яка тема була популярна?</h2>
+    <p class="section-desc">Heatmap по десятиліттях 1990–2022. Клікніть на клітинку щоб побачити топ-5 наборів.</p>
+    <div class="chart-box">
+      <div id="chart-decade"></div>
+      <div id="decade-detail" class="chart-detail"></div>
+    </div>
+  </section>
+
+  <!-- 8 MINIFIG -->
+  <section id="section-minifig">
+    <div class="section-num">08 / мініфігурки</div>
+    <h2>Більше мініфігурок — вища ціна?</h2>
+    <p class="section-desc">Середня ціна набору залежно від кількості мініфігурок у ньому.</p>
+    <div class="controls">
+      <label class="ctrl-label">Тема:</label>
+      <select id="mf-theme" onchange="renderMinifig()"><option value="">Всі теми</option></select>
+    </div>
+    <div class="chart-box"><div id="chart-minifig"></div></div>
+  </section>
+
+  <!-- 9 TOP SETS -->
+  <section id="section-top">
+    <div class="section-num">09 / зал слави</div>
+    <h2>Найдорожчі набори</h2>
+    <p class="section-desc">Топ наборів за роздрібною ціною. Фільтруйте за темою.</p>
+    <div class="controls">
+      <label class="ctrl-label">Тема:</label>
+      <select id="top-theme" onchange="renderTopSets()"><option value="">Всі теми</option></select>
+      <div class="range-wrap">
+        <label class="ctrl-label">Топ:</label>
+        <input type="range" id="top-n" min="4" max="10" value="8" step="1"
+               oninput="document.getElementById('top-n-val').textContent=this.value;renderTopSets()">
+        <span class="range-val" id="top-n-val">8</span>
+      </div>
+    </div>
+    <div id="sets-grid"></div>
+  </section>
+
+  <footer>
+    Дані: <a href="https://www.kaggle.com/datasets/maggieakarn/lego-dataset" target="_blank">Kaggle — LEGO Dataset</a>
+    &nbsp;·&nbsp; Візуалізація: D3.js
+  </footer>
+</div>
+
+<script>
+  var ALL=[],DATA=[],TOP_THEMES=[],THEME_COLOR={};
+  var growthMode='total',showTrend=true;
+  var PALETTE=["#e3000b","#f5a623","#006db7","#007f3b","#9b59b6","#e67e22","#1abc9c","#c0392b","#2980b9","#27ae60","#f39c12","#8e44ad","#16a085","#d35400","#7f8c8d"];
+
+  // знамениті набори з локальними картинками
+  var FAMOUS_SETS = [
+    {name:'Millennium Falcon',theme:'Star Wars',price:849,pieces:7541,year:2017,img:'img/millenium.png'},
+    {name:'Titanic',theme:'Icons',price:629,pieces:9090,year:2021,img:'img/titanic.png'},
+    {name:'Eiffel Tower',theme:'Icons',price:629,pieces:10001,year:2022,img:'img/eiffel-tower.png'},
+    {name:'Colosseum',theme:'Icons',price:549,pieces:9036,year:2020,img:'img/colosseum.png'},
+    {name:'Hogwarts Castle',theme:'Harry Potter',price:469,pieces:6020,year:2018,img:'img/hogwarts-castle.png'},
+    {name:'Death Star',theme:'Star Wars',price:499,pieces:4016,year:2016,img:'img/death-star.png'},
+    {name:'Taj Mahal',theme:'Icons',price:369,pieces:5923,year:2021,img:'img/taj-mahal.png'},
+    {name:'Bugatti Chiron',theme:'Technic',price:449,pieces:3599,year:2018,img:'img/technic-bugatti.png'},
+    {name:'ISS',theme:'Ideas',price:69,pieces:864,year:2020,img:'img/iss.png'},
+    {name:'Rivendell',theme:'Lord of the Rings',price:499,pieces:6167,year:2023,img:'img/rivendell.png'},
+  ];
+
+  var tip=document.getElementById('tooltip');
+  function showTip(html,e){tip.innerHTML=html;tip.style.opacity=1;moveTip(e);}
+  function moveTip(e){
+    tip.style.left=(e.clientX>window.innerWidth-230?e.clientX-220:e.clientX+14)+'px';
+    tip.style.top=(e.clientY>window.innerHeight-150?e.clientY-120:e.clientY+14)+'px';
+  }
+  function hideTip(){tip.style.opacity=0;}
+
+  function init(){
+    DATA=ALL.filter(function(d){
+      return d.year>=1980&&d.year<=2023&&d.pieces>0&&d.pieces<10000&&d.US_retailPrice>0&&d.US_retailPrice<900;
+    });
+    var counts={};
+    DATA.forEach(function(d){counts[d.theme]=(counts[d.theme]||0)+1;});
+    TOP_THEMES=Object.keys(counts).sort(function(a,b){return counts[b]-counts[a];}).slice(0,15);
+    TOP_THEMES.forEach(function(t,i){THEME_COLOR[t]=PALETTE[i%PALETTE.length];});
+
+    var avgPrice=d3.mean(DATA,function(d){return d.US_retailPrice;});
+    var medPieces=d3.median(DATA,function(d){return d.pieces;});
+    var nThemes=Object.keys(counts).length;
+
+    document.getElementById('hero-stats').innerHTML=[
+      [DATA.length.toLocaleString(),'наборів','#e3000b'],
+      ['$'+Math.round(avgPrice),'середня ціна','#f5a623'],
+      [Math.round(medPieces),'медіана деталей','#006db7'],
+      [nThemes,'унікальних тем','#007f3b']
+    ].map(function(s){
+      return '<div class="stat-card"><div class="stat-val" style="color:'+s[2]+'">'+s[0]+'</div><div class="stat-lbl">'+s[1]+'</div></div>';
+    }).join('');
+
+    // populate selects
+    ['sc-theme','top-theme','age-theme','mf-theme'].forEach(function(id){
+      var sel=document.getElementById(id);
+      TOP_THEMES.forEach(function(t){sel.innerHTML+='<option value="'+t+'">'+t+'</option>';});
+    });
+    var hlSel=document.getElementById('ppp-hl');
+    hlSel.innerHTML='<option value="">—</option>';
+    TOP_THEMES.forEach(function(t){hlSel.innerHTML+='<option value="'+t+'">'+t+'</option>';});
+    hlSel.value='Star Wars';
+
+    var r1=document.getElementById('radar-t1'),r2=document.getElementById('radar-t2'),r3=document.getElementById('radar-t3');
+    r3.innerHTML='<option value="">—</option>';
+    TOP_THEMES.forEach(function(t){
+      r1.innerHTML+='<option value="'+t+'">'+t+'</option>';
+      r2.innerHTML+='<option value="'+t+'">'+t+'</option>';
+      r3.innerHTML+='<option value="'+t+'">'+t+'</option>';
+    });
+    r1.value=TOP_THEMES[0]||'';
+    r2.value=TOP_THEMES[1]||'';
+    r3.value=TOP_THEMES[2]||'';
+
+    document.getElementById('loading').style.display='none';
+    document.getElementById('main-content').style.display='block';
+
+    renderGrowth();renderPPP();renderScatter();renderWaffle();
+    renderAge();renderRadar();renderDecade();renderMinifig();renderTopSets();
+  }
+
+  // ── helpers ─────────────────────────────────────────
+  function makeAxes(svg,x,y,W,H,ml,mr,mt,mb,xFmt,yFmt,xticks,yticks){
+    svg.append('g').attr('transform','translate(0,'+(H-mb)+')')
+            .call(d3.axisBottom(x).ticks(xticks||6).tickFormat(xFmt||null))
+            .call(function(g){g.select('.domain').remove();
+              g.selectAll('.tick line').clone().attr('y2',-(H-mb-mt)).attr('stroke','#1e1e1e').attr('stroke-dasharray','3,3');
+              g.selectAll('text').attr('fill','#666').attr('font-size',11);});
+    svg.append('g').attr('transform','translate('+ml+',0)')
+            .call(d3.axisLeft(y).ticks(yticks||5).tickFormat(yFmt||null))
+            .call(function(g){g.select('.domain').remove();
+              g.selectAll('.tick line').attr('x2',W-ml-mr).attr('stroke','#1e1e1e');
+              g.selectAll('text').attr('fill','#666').attr('font-size',11);});
+  }
+
+  // ── GROWTH ──────────────────────────────────────────
+  function setGrowthMode(m){
+    growthMode=m;
+    document.getElementById('btn-total').classList.toggle('active',m==='total');
+    document.getElementById('btn-stacked').classList.toggle('active',m==='stacked');
+    renderGrowth();
+  }
+  function renderGrowth(){
+    var el=document.getElementById('chart-growth');el.innerHTML='';
+    var W=el.clientWidth||820,H=300,ml=50,mr=24,mt=20,mb=44;
+    var yearsSet={};DATA.forEach(function(d){yearsSet[d.year]=true;});
+    var years=Object.keys(yearsSet).map(Number).sort(function(a,b){return a-b;});
+    var yt=years.map(function(y){return{year:y,count:DATA.filter(function(d){return d.year===y;}).length};});
+    var x=d3.scaleLinear().domain(d3.extent(years)).range([ml,W-mr]);
+    var y=d3.scaleLinear().domain([0,d3.max(yt,function(d){return d.count;})*1.12]).range([H-mb,mt]);
+    var svg=d3.select(el).append('svg').attr('width',W).attr('height',H);
+    makeAxes(svg,x,y,W,H,ml,mr,mt,mb,d3.format('d'),null,10,5);
+    svg.append('text').attr('x',W/2).attr('y',H-4).attr('text-anchor','middle').attr('font-size',11).attr('fill','#555').text('Рік');
+    svg.append('text').attr('transform','rotate(-90)').attr('x',-H/2).attr('y',13).attr('text-anchor','middle').attr('font-size',11).attr('fill','#555').text('К-сть нових наборів');
+
+    if(growthMode==='total'){
+      var af=d3.area().x(function(d){return x(d.year);}).y0(H-mb).y1(function(d){return y(d.count);}).curve(d3.curveMonotoneX);
+      var lf=d3.line().x(function(d){return x(d.year);}).y(function(d){return y(d.count);}).curve(d3.curveMonotoneX);
+      svg.append('path').datum(yt).attr('fill','#f5a623').attr('opacity',.12).attr('d',af);
+      var p=svg.append('path').datum(yt).attr('fill','none').attr('stroke','#e3000b').attr('stroke-width',2.5).attr('d',lf);
+      var len=p.node().getTotalLength();
+      p.attr('stroke-dasharray',len).attr('stroke-dashoffset',len).transition().duration(1200).ease(d3.easeCubicInOut).attr('stroke-dashoffset',0);
+    } else {
+      var keys=TOP_THEMES.slice(0,7);
+      var sd=years.map(function(yr){
+        var row={year:yr};
+        keys.forEach(function(t){row[t]=DATA.filter(function(d){return d.year===yr&&d.theme===t;}).length;});
+        row['Інші']=DATA.filter(function(d){return d.year===yr&&keys.indexOf(d.theme)===-1;}).length;
+        return row;
+      });
+      var ak=keys.concat(['Інші']);
+      var yMaxS=d3.max(sd,function(d){return d3.sum(ak,function(k){return d[k];});});
+      var yS=d3.scaleLinear().domain([0,yMaxS*1.1]).range([H-mb,mt]);
+      var af2=d3.area().x(function(d){return x(d.data.year);}).y0(function(d){return yS(d[0]);}).y1(function(d){return yS(d[1]);}).curve(d3.curveMonotoneX);
+      d3.stack().keys(ak)(sd).forEach(function(layer){
+        svg.append('path').datum(layer).attr('fill',layer.key==='Інші'?'#333':(THEME_COLOR[layer.key]||'#555')).attr('opacity',.8).attr('d',af2);
+      });
+      var lg=svg.append('g').attr('transform','translate('+(ml+8)+','+(mt+4)+')');
+      ak.slice(0,8).forEach(function(k,i){
+        var c=k==='Інші'?'#555':(THEME_COLOR[k]||'#555');
+        lg.append('rect').attr('x',(i%4)*175).attr('y',Math.floor(i/4)*16).attr('width',8).attr('height',8).attr('rx',2).attr('fill',c);
+        lg.append('text').attr('x',(i%4)*175+11).attr('y',Math.floor(i/4)*16+8).attr('font-size',10).attr('fill','#aaa').text(k);
+      });
+    }
+    [{year:1999,label:'Star Wars'},{year:2008,label:'Криза'},{year:2014,label:'Фільм LEGO'}].forEach(function(a){
+      var d=yt.find(function(d){return d.year===a.year;});if(!d)return;
+      svg.append('line').attr('x1',x(a.year)).attr('x2',x(a.year)).attr('y1',mt).attr('y2',H-mb).attr('stroke','#3a3a3a').attr('stroke-width',1).attr('stroke-dasharray','4,3');
+      svg.append('circle').attr('cx',x(a.year)).attr('cy',y(d.count)).attr('r',4).attr('fill','#e3000b').attr('stroke','#0d0d0d').attr('stroke-width',2);
+      svg.append('text').attr('x',x(a.year)+5).attr('y',y(d.count)-8).attr('font-size',10).attr('fill','#777').text(a.label);
+    });
+    var hG=svg.append('g').attr('opacity',0).attr('pointer-events','none');
+    var hL=hG.append('line').attr('y1',mt).attr('y2',H-mb).attr('stroke','#555').attr('stroke-width',1).attr('stroke-dasharray','3,3');
+    var hD=hG.append('circle').attr('r',5).attr('fill','#e3000b').attr('stroke','#0d0d0d').attr('stroke-width',2);
+    svg.append('rect').attr('x',ml).attr('y',mt).attr('width',W-ml-mr).attr('height',H-mb-mt).attr('fill','transparent')
+            .on('mousemove',function(event){
+              var yr=Math.round(x.invert(d3.pointer(event)[0]));
+              var d=yt.reduce(function(a,b){return Math.abs(a.year-yr)<Math.abs(b.year-yr)?a:b;});
+              hG.attr('opacity',1);hL.attr('x1',x(d.year)).attr('x2',x(d.year));hD.attr('cx',x(d.year)).attr('cy',y(d.count));
+              var tc={};DATA.filter(function(r){return r.year===d.year;}).forEach(function(r){tc[r.theme]=(tc[r.theme]||0)+1;});
+              var best=Object.keys(tc).sort(function(a,b){return tc[b]-tc[a];})[0];
+              showTip('<b style="color:#f5a623">'+d.year+'</b><br>'+d.count+' наборів<br>топ: '+(best||'—'),event);
+            })
+            .on('mouseleave',function(){hG.attr('opacity',0);hideTip();});
+  }
+
+  // ── PPP ─────────────────────────────────────────────
+  function renderPPP(){
+    var n=+document.getElementById('ppp-n').value;
+    var sortBy=document.getElementById('ppp-sort').value;
+    var hl=document.getElementById('ppp-hl').value;
+    var byTheme=TOP_THEMES.slice(0,Math.max(n,5)).map(function(theme){
+      var sets=DATA.filter(function(d){return d.theme===theme&&d.pieces>0&&d.US_retailPrice>0;});
+      if(sets.length<3)return null;
+      var ppp=sets.map(function(d){return d.US_retailPrice/d.pieces;}).sort(d3.ascending);
+      var exp=sets.reduce(function(a,b){return a.US_retailPrice>b.US_retailPrice?a:b;});
+      return{theme:theme,n:sets.length,color:THEME_COLOR[theme]||'#888',
+        median:d3.median(ppp),q1:d3.quantile(ppp,.25),q3:d3.quantile(ppp,.75),
+        p5:d3.quantile(ppp,.05),p95:d3.quantile(ppp,.95),exp:exp};
+    }).filter(Boolean);
+    if(sortBy==='price')byTheme.sort(function(a,b){return b.median-a.median;});
+    else if(sortBy==='alpha')byTheme.sort(function(a,b){return a.theme.localeCompare(b.theme);});
+    else byTheme.sort(function(a,b){return b.n-a.n;});
+    byTheme=byTheme.slice(0,n);
+    var el=document.getElementById('chart-ppp');el.innerHTML='';
+    var W=el.clientWidth||820,H=30*n+70,ml=130,mr=30,mt=16,mb=40;
+    var xMax=d3.max(byTheme,function(d){return d.p95;})*1.15;
+    var x=d3.scaleLinear().domain([0,xMax]).range([ml,W-mr]);
+    var y=d3.scaleBand().domain(byTheme.map(function(d){return d.theme;})).range([mt,H-mb]).padding(.35);
+    var bw=y.bandwidth();
+    var svg=d3.select(el).append('svg').attr('width',W).attr('height',H);
+    svg.append('g').attr('transform','translate(0,'+(H-mb)+')')
+            .call(d3.axisBottom(x).ticks(5).tickFormat(function(d){return '$'+d.toFixed(2);}))
+            .call(function(g){g.select('.domain').remove();
+              g.selectAll('.tick line').clone().attr('y2',-(H-mb-mt)).attr('stroke','#1e1e1e').attr('stroke-dasharray','3,3');
+              g.selectAll('text').attr('fill','#666').attr('font-size',11);});
+    svg.append('g').attr('transform','translate('+ml+',0)')
+            .call(d3.axisLeft(y))
+            .call(function(g){g.select('.domain').remove();
+              g.selectAll('text').attr('font-size',11)
+                      .attr('fill',function(d){return d===hl?(THEME_COLOR[d]||'#fff'):'#aaa';})
+                      .attr('font-weight',function(d){return d===hl?'600':'400';});});
+    svg.append('text').attr('x',W/2).attr('y',H-4).attr('text-anchor','middle').attr('font-size',11).attr('fill','#555').text('Медіанна ціна за одну деталь (USD)');
+    var gMed=d3.median(byTheme,function(d){return d.median;});
+    svg.append('line').attr('x1',x(gMed)).attr('x2',x(gMed)).attr('y1',mt).attr('y2',H-mb).attr('stroke','#3a3a3a').attr('stroke-width',1).attr('stroke-dasharray','4,3');
+    byTheme.forEach(function(d){
+      var isHL=hl&&d.theme===hl;
+      var fade=(hl&&!isHL)?0.2:1;
+      var cy=y(d.theme)+bw/2;
+      var g=svg.append('g').attr('opacity',fade);
+      g.append('line').attr('x1',x(d.p5)).attr('x2',x(d.p95)).attr('y1',cy).attr('y2',cy).attr('stroke',d.color).attr('stroke-width',1.2).attr('opacity',.3);
+      [d.p5,d.p95].forEach(function(v){
+        g.append('line').attr('x1',x(v)).attr('x2',x(v)).attr('y1',cy-4).attr('y2',cy+4).attr('stroke',d.color).attr('stroke-width',1.2).attr('opacity',.3);
+      });
+      var iqr=g.append('rect').attr('x',x(d.q1)).attr('y',y(d.theme)).attr('width',0).attr('height',bw).attr('rx',3).attr('fill',d.color).attr('opacity',isHL?.4:.18);
+      iqr.transition().duration(600).ease(d3.easeCubicOut).attr('width',x(d.q3)-x(d.q1));
+      var ml2=g.append('line').attr('x1',x(d.q1)).attr('x2',x(d.q1)).attr('y1',y(d.theme)-2).attr('y2',y(d.theme)+bw+2).attr('stroke',d.color).attr('stroke-width',isHL?3.5:2.5);
+      ml2.transition().duration(600).ease(d3.easeCubicOut).attr('x1',x(d.median)).attr('x2',x(d.median));
+      g.append('text').attr('x',x(d.median)+5).attr('y',cy+4).attr('font-size',isHL?12:10).attr('fill',isHL?d.color:'#666').attr('font-weight',isHL?'600':'400').text('$'+d.median.toFixed(3));
+      svg.append('rect').attr('x',ml).attr('y',y(d.theme)-2).attr('width',W-ml-mr).attr('height',bw+4).attr('fill','transparent')
+              .on('mouseover',function(e){showTip('<b style="color:'+d.color+'">'+d.theme+'</b><br>медіана: $'+d.median.toFixed(3)+'/дет.<br>IQR: $'+d.q1.toFixed(3)+'–$'+d.q3.toFixed(3)+'<br>наборів: '+d.n,e);})
+              .on('mousemove',moveTip).on('mouseout',hideTip);
+    });
+  }
+
+  // ── SCATTER ─────────────────────────────────────────
+  function toggleTrend(){showTrend=!showTrend;document.getElementById('btn-trend').classList.toggle('active',showTrend);renderScatter();}
+  function renderScatter(){
+    var theme=document.getElementById('sc-theme').value;
+    var year=+document.getElementById('sc-year').value;
+    var src=DATA.filter(function(d){return d.year<=year&&(!theme||d.theme===theme);});
+    if(src.length>2500)src=src.filter(function(_,i){return i%Math.ceil(src.length/2500)===0;});
+    var el=document.getElementById('chart-scatter');el.innerHTML='';
+    var W=el.clientWidth||820,H=360,ml=52,mr=20,mt=16,mb=44;
+    var xMax=d3.quantile(src.map(function(d){return d.pieces;}).sort(d3.ascending),.97)||500;
+    var yMax=d3.quantile(src.map(function(d){return d.US_retailPrice;}).sort(d3.ascending),.97)||200;
+    var x=d3.scaleLinear().domain([0,xMax]).range([ml,W-mr]);
+    var y=d3.scaleLinear().domain([0,yMax]).range([H-mb,mt]);
+    var svg=d3.select(el).append('svg').attr('width',W).attr('height',H);
+    makeAxes(svg,x,y,W,H,ml,mr,mt,mb,function(d){return d+' дет.';},function(d){return '$'+d;},6,5);
+    svg.append('text').attr('x',W/2).attr('y',H-4).attr('text-anchor','middle').attr('font-size',11).attr('fill','#555').text('Кількість деталей');
+    svg.append('text').attr('transform','rotate(-90)').attr('x',-H/2).attr('y',13).attr('text-anchor','middle').attr('font-size',11).attr('fill','#555').text('Ціна (USD)');
+    svg.selectAll('circle').data(src).join('circle')
+            .attr('cx',function(d){return x(d.pieces);}).attr('cy',function(d){return y(d.US_retailPrice);})
+            .attr('r',3.5).attr('fill',function(d){return THEME_COLOR[d.theme]||'#555';})
+            .attr('opacity',theme?.7:.4).attr('stroke',theme?'#0d0d0d':'none').attr('stroke-width',.5)
+            .on('mouseover',function(e,d){showTip('<b>'+d.name+'</b><br>'+d.pieces+' дет · $'+d.US_retailPrice+'<br>'+d.theme+' · '+d.year,e);})
+            .on('mousemove',moveTip).on('mouseout',hideTip);
+    if(showTrend&&src.length>5){
+      var mx2=d3.mean(src,function(d){return d.pieces;}),my2=d3.mean(src,function(d){return d.US_retailPrice;});
+      var num=d3.sum(src,function(d){return(d.pieces-mx2)*(d.US_retailPrice-my2);});
+      var den=d3.sum(src,function(d){return(d.pieces-mx2)*(d.pieces-mx2);});
+      var s=num/den,b=my2-s*mx2;
+      svg.append('line').attr('x1',x(0)).attr('y1',y(b)).attr('x2',x(xMax)).attr('y2',y(s*xMax+b))
+              .attr('stroke','#f5a623').attr('stroke-width',1.8).attr('stroke-dasharray','6,3').attr('opacity',.8);
+    }
+    svg.append('text').attr('x',W-mr).attr('y',mt+14).attr('text-anchor','end').attr('font-size',11).attr('fill','#555').text('n='+src.length.toLocaleString()+' наборів');
+  }
+
+  // ── WAFFLE ──────────────────────────────────────────
+  function renderWaffle(){
+    var year=+document.getElementById('waffle-year').value;
+    var yd=DATA.filter(function(d){return d.year===year;});
+    var el=document.getElementById('chart-waffle');el.innerHTML='';
+    document.getElementById('waffle-legend').innerHTML='';
+    if(!yd.length)return;
+    var cm={};yd.forEach(function(d){cm[d.theme]=(cm[d.theme]||0)+1;});
+    var cnts=Object.keys(cm).map(function(t){return{t:t,c:cm[t]};}).sort(function(a,b){return b.c-a.c;});
+    var total=yd.length,top8=cnts.slice(0,8);
+    var otherC=total-top8.reduce(function(s,d){return s+d.c;},0);
+    var slices=top8.concat([{t:'Інші',c:otherC}]);
+    function colorOf(t){return t==='Інші'?'#2a2a2a':(THEME_COLOR[t]||'#555');}
+    var squares=[];
+    slices.forEach(function(s){var n=Math.round(s.c/total*100);for(var i=0;i<n;i++)squares.push({t:s.t,color:colorOf(s.t)});});
+    while(squares.length<100)squares.push({t:'Інші',color:'#222'});squares.length=100;
+    var COLS=20,CELL=22,GAP=3,ROWS=Math.ceil(100/COLS);
+    var W=el.clientWidth||820,svgW=COLS*(CELL+GAP)+GAP,svgH=ROWS*(CELL+GAP)+GAP,offX=(W-svgW)/2;
+    var svg=d3.select(el).append('svg').attr('width',W).attr('height',svgH);
+    squares.forEach(function(sq,i){
+      var col=i%COLS,row=Math.floor(i/COLS);
+      svg.append('rect').attr('x',offX+GAP+col*(CELL+GAP)).attr('y',GAP+row*(CELL+GAP))
+              .attr('width',CELL).attr('height',CELL).attr('rx',4).attr('fill',sq.color).attr('opacity',.9)
+              .on('mouseover',function(e){var sl=slices.find(function(s){return s.t===sq.t;});showTip('<b style="color:'+sq.color+'">'+sq.t+'</b><br>'+(sl?Math.round(sl.c/total*100):0)+'% наборів',e);})
+              .on('mousemove',moveTip).on('mouseout',hideTip);
+    });
+    var legEl=document.getElementById('waffle-legend');
+    slices.forEach(function(s){var pct=Math.round(s.c/total*100);if(!pct)return;legEl.innerHTML+='<div class="leg-item"><div class="leg-swatch" style="background:'+colorOf(s.t)+'"></div><span>'+s.t+' — '+pct+'%</span></div>';});
+  }
+
+  // ── AGE vs PRICE ─────────────────────────────────────
+  function renderAge(){
+    var theme=document.getElementById('age-theme').value;
+    var src=DATA.filter(function(d){return(!theme||d.theme===theme)&&d.agerange_min>0&&d.agerange_min<=18;});
+    var ages=[1,2,3,4,5,6,7,8,9,10,11,12,13,14,16,18];
+    var byAge=ages.map(function(a){
+      var sets=src.filter(function(d){return d.agerange_min===a;});
+      return{age:a,count:sets.length,avgPrice:sets.length?d3.mean(sets,function(d){return d.US_retailPrice;}):null,avgPieces:sets.length?d3.mean(sets,function(d){return d.pieces;}):null};
+    }).filter(function(d){return d.count>2;});
+    var el=document.getElementById('chart-age');el.innerHTML='';
+    var W=el.clientWidth||820,H=300,ml=52,mr=20,mt=20,mb=44;
+    var x=d3.scaleBand().domain(byAge.map(function(d){return d.age+'+';})).range([ml,W-mr]).padding(.25);
+    var yMax=d3.max(byAge,function(d){return d.avgPrice;})||200;
+    var y=d3.scaleLinear().domain([0,yMax*1.1]).range([H-mb,mt]);
+    var svg=d3.select(el).append('svg').attr('width',W).attr('height',H);
+    svg.append('g').attr('transform','translate(0,'+(H-mb)+')')
+            .call(d3.axisBottom(x)).call(function(g){g.select('.domain').remove();g.selectAll('text').attr('fill','#666').attr('font-size',11);});
+    svg.append('g').attr('transform','translate('+ml+',0)')
+            .call(d3.axisLeft(y).ticks(5).tickFormat(function(d){return '$'+d;}))
+            .call(function(g){g.select('.domain').remove();g.selectAll('.tick line').attr('x2',W-ml-mr).attr('stroke','#1e1e1e');g.selectAll('text').attr('fill','#666').attr('font-size',11);});
+    svg.append('text').attr('x',W/2).attr('y',H-4).attr('text-anchor','middle').attr('font-size',11).attr('fill','#555').text('Мінімальний рекомендований вік');
+    svg.append('text').attr('transform','rotate(-90)').attr('x',-H/2).attr('y',13).attr('text-anchor','middle').attr('font-size',11).attr('fill','#555').text('Середня ціна (USD)');
+    // color scale by age
+    var colScale=d3.scaleSequential().domain([1,18]).interpolator(d3.interpolate('#006db7','#e3000b'));
+    byAge.forEach(function(d){
+      var col=colScale(d.age);
+      var bar=svg.append('rect').attr('x',x(d.age+'+')).attr('y',H-mb).attr('width',x.bandwidth()).attr('height',0).attr('rx',4).attr('fill',col).attr('opacity',.85);
+      bar.transition().duration(600).ease(d3.easeCubicOut).attr('y',y(d.avgPrice)).attr('height',H-mb-y(d.avgPrice));
+      svg.append('rect').attr('x',x(d.age+'+')).attr('y',mt).attr('width',x.bandwidth()).attr('height',H-mb-mt).attr('fill','transparent')
+              .on('mouseover',function(e){showTip('<b style="color:'+col+'">Вік '+d.age+'+</b><br>середня ціна: $'+Math.round(d.avgPrice)+'<br>середньо деталей: '+Math.round(d.avgPieces)+'<br>наборів: '+d.count,e);})
+              .on('mousemove',moveTip).on('mouseout',hideTip);
+    });
+  }
+
+  // ── RADAR ────────────────────────────────────────────
+  function renderRadar(){
+    var t1=document.getElementById('radar-t1').value;
+    var t2=document.getElementById('radar-t2').value;
+    var t3=document.getElementById('radar-t3').value;
+    var themes=[t1,t2,t3].filter(Boolean);
+    var el=document.getElementById('chart-radar');el.innerHTML='';
+    var W=el.clientWidth||820,H=380,cx=W/2,cy=H/2,R=140;
+    var axes=['Ціна','Деталей','Мінфігурок','Вік','К-сть наборів'];
+    var n=axes.length;
+    // нормалізовані значення для кожної теми
+    var allStats=TOP_THEMES.map(function(t){
+      var sets=DATA.filter(function(d){return d.theme===t;});
+      return{theme:t,price:d3.mean(sets,function(d){return d.US_retailPrice;})||0,pieces:d3.mean(sets,function(d){return d.pieces;})||0,
+        mf:d3.mean(sets.filter(function(d){return d.minifigs>0;}),function(d){return d.minifigs;})||0,
+        age:d3.mean(sets.filter(function(d){return d.agerange_min>0;}),function(d){return d.agerange_min;})||0,count:sets.length};
+    });
+    var maxVals={price:d3.max(allStats,function(d){return d.price;}),pieces:d3.max(allStats,function(d){return d.pieces;}),
+      mf:d3.max(allStats,function(d){return d.mf;}),age:d3.max(allStats,function(d){return d.age;}),count:d3.max(allStats,function(d){return d.count;})};
+    function norm(stat){return[stat.price/maxVals.price,stat.pieces/maxVals.pieces,stat.mf/maxVals.mf,stat.age/maxVals.age,stat.count/maxVals.count];}
+    var svg=d3.select(el).append('svg').attr('width',W).attr('height',H);
+    // grid circles
+    [.2,.4,.6,.8,1].forEach(function(r){
+      svg.append('circle').attr('cx',cx).attr('cy',cy).attr('r',R*r).attr('fill','none').attr('stroke','#2a2a2a').attr('stroke-width',1);
+    });
+    // axes
+    axes.forEach(function(ax,i){
+      var angle=(i/n)*2*Math.PI-Math.PI/2;
+      var x2=cx+R*Math.cos(angle),y2=cy+R*Math.sin(angle);
+      svg.append('line').attr('x1',cx).attr('y1',cy).attr('x2',x2).attr('y2',y2).attr('stroke','#333').attr('stroke-width',1);
+      var lx=cx+(R+18)*Math.cos(angle),ly=cy+(R+18)*Math.sin(angle);
+      svg.append('text').attr('x',lx).attr('y',ly).attr('text-anchor','middle').attr('dominant-baseline','middle').attr('font-size',11).attr('fill','#aaa').text(ax);
+    });
+    // polygons
+    themes.forEach(function(t,ti){
+      var stat=allStats.find(function(s){return s.theme===t;});if(!stat)return;
+      var vals=norm(stat);
+      var pts=vals.map(function(v,i){
+        var angle=(i/n)*2*Math.PI-Math.PI/2;
+        return[cx+R*v*Math.cos(angle),cy+R*v*Math.sin(angle)];
+      });
+      var col=THEME_COLOR[t]||PALETTE[ti];
+      svg.append('polygon').attr('points',pts.map(function(p){return p.join(',');}).join(' '))
+              .attr('fill',col).attr('opacity',.15).attr('stroke',col).attr('stroke-width',2);
+      pts.forEach(function(p,i){
+        svg.append('circle').attr('cx',p[0]).attr('cy',p[1]).attr('r',4).attr('fill',col).attr('stroke','#0d0d0d').attr('stroke-width',1.5);
+      });
+      // legend
+      svg.append('rect').attr('x',24).attr('y',20+ti*20).attr('width',10).attr('height',10).attr('rx',2).attr('fill',col);
+      svg.append('text').attr('x',38).attr('y',29+ti*20).attr('font-size',11).attr('fill',col).text(t);
+    });
+  }
+
+  // ── DECADE HEATMAP ───────────────────────────────────
+  function renderDecade(){
+    var el=document.getElementById('chart-decade');el.innerHTML='';
+    document.getElementById('decade-detail').innerHTML='';
+    var themes=TOP_THEMES.slice(0,10);
+    var decades=['1990s','2000s','2010s','2020s'];
+    function decadeOf(y){return y<2000?'1990s':y<2010?'2000s':y<2020?'2010s':'2020s';}
+    var W=el.clientWidth||820,ml=110,mr=20,mt=20,mb=30;
+    var cellW=(W-ml-mr)/decades.length,cellH=28;
+    var H=themes.length*cellH+mt+mb;
+    var matrix=[];
+    var maxCount=0;
+    themes.forEach(function(t){
+      decades.forEach(function(dec){
+        var sets=DATA.filter(function(d){return d.theme===t&&decadeOf(d.year)===dec;});
+        var count=sets.length;
+        if(count>maxCount)maxCount=count;
+        matrix.push({theme:t,decade:dec,count:count,sets:sets});
+      });
+    });
+    var colorScale=d3.scaleSequential().domain([0,maxCount]).interpolator(d3.interpolate('#1a1a1a','#e3000b'));
+    var svg=d3.select(el).append('svg').attr('width',W).attr('height',H);
+    decades.forEach(function(dec,i){
+      svg.append('text').attr('x',ml+i*cellW+cellW/2).attr('y',mt-4).attr('text-anchor','middle').attr('font-size',11).attr('fill','#666').text(dec);
+    });
+    themes.forEach(function(t,ti){
+      svg.append('text').attr('x',ml-6).attr('y',mt+ti*cellH+cellH/2+4).attr('text-anchor','end').attr('font-size',11).attr('fill','#aaa').text(t);
+      decades.forEach(function(dec,di){
+        var item=matrix.find(function(m){return m.theme===t&&m.decade===dec;});
+        var count=item?item.count:0;
+        var cell=svg.append('rect').attr('x',ml+di*cellW+1).attr('y',mt+ti*cellH+1).attr('width',cellW-2).attr('height',cellH-2).attr('rx',3).attr('fill',colorScale(count)).attr('opacity',.9).style('cursor',count>0?'pointer':'default');
+        if(count>0){
+          cell.on('mouseover',function(e){showTip('<b style="color:'+THEME_COLOR[t]+'">'+t+'</b><br>'+dec+': '+count+' наборів<br><i style="color:#888">клік — топ-5</i>',e);})
+                  .on('mousemove',moveTip).on('mouseout',hideTip)
+                  .on('click',function(){
+                    var top5=item.sets.sort(function(a,b){return b.US_retailPrice-a.US_retailPrice;}).slice(0,5);
+                    var det=document.getElementById('decade-detail');
+                    det.innerHTML='<b style="color:'+THEME_COLOR[t]+'">'+t+' / '+dec+'</b> — топ-5 наборів:<br>'+
+                            top5.map(function(s){return '<span style="color:#e8e8e8">'+s.name+'</span> <span style="color:#f5a623">$'+s.US_retailPrice+'</span> · '+s.pieces+' дет. · '+s.year;}).join('<br>');
+                  });
+        }
+        if(count>0){
+          svg.append('text').attr('x',ml+di*cellW+cellW/2).attr('y',mt+ti*cellH+cellH/2+4).attr('text-anchor','middle').attr('font-size',10).attr('fill',count>maxCount*0.5?'#fff':'#aaa').attr('pointer-events','none').text(count);
+        }
+      });
+    });
+  }
+
+
+  // ── MINIFIG ──────────────────────────────────────────
+  function renderMinifig(){
+    var theme=document.getElementById('mf-theme').value;
+    var src=DATA.filter(function(d){return(!theme||d.theme===theme)&&d.minifigs>0&&d.minifigs<=20;});
+    var mfCounts=[1,2,3,4,5,6,7,8,9,10,12,15,20];
+    var byMF=mfCounts.map(function(m){
+      var sets=src.filter(function(d){return d.minifigs===m;});
+      return{mf:m,count:sets.length,avgPrice:sets.length?d3.mean(sets,function(d){return d.US_retailPrice;}):null};
+    }).filter(function(d){return d.count>1;});
+    var el=document.getElementById('chart-minifig');el.innerHTML='';
+    var W=el.clientWidth||820,H=300,ml=55,mr=20,mt=20,mb=44;
+    var x=d3.scaleLinear().domain([0,d3.max(byMF,function(d){return d.mf;})+1]).range([ml,W-mr]);
+    var y=d3.scaleLinear().domain([0,d3.max(byMF,function(d){return d.avgPrice;})*1.1||200]).range([H-mb,mt]);
+    var svg=d3.select(el).append('svg').attr('width',W).attr('height',H);
+    makeAxes(svg,x,y,W,H,ml,mr,mt,mb,null,function(d){return '$'+d;},8,5);
+    svg.append('text').attr('x',W/2).attr('y',H-4).attr('text-anchor','middle').attr('font-size',11).attr('fill','#555').text('К-сть мініфігурок');
+    svg.append('text').attr('transform','rotate(-90)').attr('x',-H/2).attr('y',13).attr('text-anchor','middle').attr('font-size',11).attr('fill','#555').text('Середня ціна (USD)');
+    // area
+    var af=d3.area().x(function(d){return x(d.mf);}).y0(H-mb).y1(function(d){return y(d.avgPrice);}).curve(d3.curveMonotoneX);
+    var lf=d3.line().x(function(d){return x(d.mf);}).y(function(d){return y(d.avgPrice);}).curve(d3.curveMonotoneX);
+    svg.append('path').datum(byMF).attr('fill','#9b59b6').attr('opacity',.15).attr('d',af);
+    svg.append('path').datum(byMF).attr('fill','none').attr('stroke','#9b59b6').attr('stroke-width',2.5).attr('d',lf);
+    svg.selectAll('.dot').data(byMF).join('circle').attr('class','dot')
+            .attr('cx',function(d){return x(d.mf);}).attr('cy',function(d){return y(d.avgPrice);})
+            .attr('r',5).attr('fill','#9b59b6').attr('stroke','#0d0d0d').attr('stroke-width',2)
+            .on('mouseover',function(e,d){showTip('<b style="color:#9b59b6">'+d.mf+' мініфіг.</b><br>середня ціна: $'+Math.round(d.avgPrice)+'<br>наборів: '+d.count,e);})
+            .on('mousemove',moveTip).on('mouseout',hideTip);
+  }
+
+  // ── TOP SETS ────────────────────────────────────────
+  function renderTopSets(){
+    var theme=document.getElementById('top-theme').value;
+    var n=+document.getElementById('top-n').value;
+    // спочатку знамениті набори, потім з датасету
+    var famous=FAMOUS_SETS.filter(function(d){return!theme||d.theme===theme;}).slice(0,Math.min(n,FAMOUS_SETS.length));
+    var fromData=DATA.filter(function(d){return!theme||d.theme===theme;})
+            .sort(function(a,b){return b.US_retailPrice-a.US_retailPrice;})
+            .slice(0,n-famous.length);
+    var top=famous.concat(fromData).slice(0,n);
+    var grid=document.getElementById('sets-grid');
+    grid.innerHTML=top.map(function(d){
+      var col=THEME_COLOR[d.theme]||'#555';
+      var imgSrc=d.img||d.imageURL||'';
+      return '<div class="set-card">'+
+              '<div class="set-img">'+(imgSrc?'<img src="'+imgSrc+'" alt="'+d.name+'" onerror="this.parentElement.innerHTML=\'🧱\'">':'🧱')+'</div>'+
+              '<div class="set-info">'+
+              '<div class="set-name">'+d.name+'</div>'+
+              '<div class="set-meta">'+
+              '<span class="set-theme" style="background:'+col+'22;color:'+col+'">'+d.theme+'</span>'+
+              '<span class="set-price">$'+(d.US_retailPrice||d.price||0)+'</span>'+                '</div>'+
+              '<div class="set-year">'+((d.pieces||0).toLocaleString())+' дет · '+d.year+'</div>'+
+              '</div></div>';
+    }).join('');
+  }
+
+  window.addEventListener('resize',function(){
+    if(!DATA.length)return;
+    renderGrowth();renderPPP();renderScatter();renderWaffle();renderAge();renderRadar();renderDecade();renderMinifig();
+  });
+
+  window.addEventListener('load',function(){
+    if(typeof LEGO_RAW!=='undefined'){
+      ALL=LEGO_RAW.map(function(d){
+        return Object.assign({},d,{year:+d.year,pieces:+d.pieces,US_retailPrice:+d.US_retailPrice,minifigs:+d.minifigs,agerange_min:+d.agerange_min});
+      });
+      init();
+    } else {
+      document.getElementById('loading').innerHTML='<div class="lego-logo">LE<span>GO</span></div><p style="color:#e3000b">lego_data.js не знайдено</p>';
+    }
+  });
+</script>
+</body>
+</html>
